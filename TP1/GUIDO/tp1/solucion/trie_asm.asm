@@ -16,11 +16,11 @@ global trie_pesar
 %define offset_c 0
 %define offset_fin 0
 
-%define size_nodo 0
+%define size_nodo 18
 
 %define offset_raiz 0
 
-%define size_trie 0
+%define size_trie 8
 
 %define offset_prim 0
 
@@ -30,7 +30,7 @@ global trie_pesar
 %define NULL 0
 
 %define FALSE 0
-%define TRUE 0
+%define TRUE 1
 
 section .rodata
 
@@ -43,17 +43,10 @@ section .text
 trie_crear:
 	PUSH RBP
 	MOV RBP,RSP
-	PUSH RBX
-	PUSH R12
-	PUSH R13
-	PUSH R14
-	PUSH R15
-	; COMPLETAR AQUI EL CODIGO
-	POP R15
-	POP R14
-	POP R13
-	POP R12
-	POP RBX
+	MOV RDI, size_trie ; le paso el tamaño del trie 
+	call malloc
+	MOV [RAX], NULL
+		
 	POP RBP
 	RET
 trie_borrar:
