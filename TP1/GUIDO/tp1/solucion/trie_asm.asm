@@ -8,7 +8,9 @@ global trie_imprimir
 global buscar_palabra
 global palabras_con_prefijo
 global trie_pesar
+global nodo_buscar
 extern malloc
+extern calloc
 extern free
 extern fopen
 extern fprintf
@@ -26,15 +28,21 @@ cierraCorchete: db" ]", 0
 espacio: db " ", 0
 stringVacio: db "", 0
 trieVacio: db "<>", 0
-saltoLinea: DB '%s', 10, 0
+saltoDeLinea: DB '%s', 10, 0
+vacio: DB '', 0
+llaveAbrir: DB '{ ', 0
+llaveCerrar: DB ' }', 0
+corcheteAbrir: DB '[ ', 0
+corcheteCerrar: DB ' ]', 0
+
 
 
 
 ; SE RECOMIENDA COMPLETAR LOS DEFINES CON LOS VALORES CORRECTOS
 %define offset_sig 0
 %define offset_hijos 8
-%define offset_c 17
-%define offset_fin 18
+%define offset_c 16
+%define offset_fin 17
 
 %define size_nodo 18
 
@@ -64,9 +72,14 @@ trie_crear:
 ;trie *trie_crear(void)
 	PUSH rbp
 	MOV rbp, rsp
+	SUB RBP,8
+	
 	MOV rdi, size_trie
 	CALL malloc
 	MOV qword[rax], NULL
+	MOV r15, RAX
+	
+	ADD RBP,8
 	POP rbp
 	ret
 	
@@ -151,107 +164,181 @@ nodo_crear:
 ;nodo *nodo_crear(char c)
 	PUSH rbp
 	MOV rbp, rsp
-	PUSH r15
 	PUSH r14
-	MOV r15, rdi
-	MOV rsi, size_nodo
-	CALL malloc
-	MOV r14, rax
-	MOV qword[r14 + offset_sig], NULL
-	MOV qword[r14 + offset_hijos], NULL
-	MOV [r14 + offset_c], rdi
-	MOV qword[r14 + offset_fin], FALSE
-	POP r14
-	POP r15
-	POP rbp	
-	ret
+	PUSH r13
+	PUSH R15
+	
+	MOV R14, RDI ; COPIO EL CHAR
+	MOV RDI, size_nodo ; paso tam del nodo
+	Call malloc ; recibo en rax el puntero
+	
+	POP R15
+	MOV qword [RAX], NULL ; el siguiente nodo a este es NULL
+	MOV qword [RAX+offset_hijos], NULL ; como estoy creando un nodo no tengo hijo = NULL
+	MOV [RAX + offset_c], r14, ;guardo el char
+	MOV byte[RAX + offset_fin], FALSE; palabra no termina
+	MOV R15, RAX
+	
+	POP R13
+	POP R14
+	POP RBP
+	RET
 
 insertar_nodo_en_nivel:
 ;nodo *insertar_nodo_en_nivel(nodo **nivel, char c)
-		PUSH RBP
-	MOV RBP,RSP
-	call nodo_buscar
-
-
-;nodo *nodo_buscar(nodo *n, char c)
+	CALL nodo_buscar
+	ret
 nodo_buscar:
-	PUSH RBP
-	MOV RBP,RSP
-	PUSH R15
-	PUSH R14
+;nodo *nodo_buscar(nodo *n, char c)
 	MOV R15, RDI
 	MOV R14, RSI
 	CMP [R15 + offset_c], R14 
 	je .nodoSi
-	CMP dword [R15 + offset_sig], NULL
-	je .nodoNo
-	lea r15, [R15 + offset_sig]
+	CMP [R15 + offset_c], R14
+	JL .agregarNodo
+	Mov RDX, R15
+	CMP qword[R15 + offset_sig], NULL; NO ENTIENDE EL NULL O LA MEMORIA NO TIENE NULL EN EL RESTO
+	JNE .sigueGirando
+	call .agregarNodo
+	ret
+	
+.sigueGirando:
+	lea r15, [r15 + offset_sig] 
+	MOV RDI, R15
+	MOV RSI, R14
 	call nodo_buscar
-	POP R15
-	POP R14
-	POP RBP
-	RET
-; ESTOS 3 ME PARECE Q ESTAN AL PEDO YA QUE NUNCA LLEGARIA ACA
-
-
+	ret
 .nodoSi:
-	MOV RDI, [R15]
-	POP R15
-	POP R14
-	RET
-.nodoNo:
-;COMPLETAR CODIDO PARA AGREGARLO LEXICOBLABLA
-	POP R14
-	POP R15	
+	MOV RDI, R15 
 	RET
 
+.agregarNodo:
+	; en rdi tengo el nodo siguiente
+	;en rsi tengo el caracter del nodo q tengo q agregar
+	; en rdx tengo el nodo anterior si es que hay anterior
+	CMP RDX, RDI
+	JE .noHayAnterior
+	
+	Mov r13, rdi ; muevo el siguiente
+	MOV r14, rdx; muevo el anterior
+	MOV R15, rsi; muevo el caracter
+	MOV RDI, size_nodo ; le doy el tamaño al nodo
+	CALL malloc
+	
+	MOV [RAX+offset_sig], R13
+	MOV  qword [RAX+offset_hijos], NULL
+	MOV [RAX+offset_c], R15
+	MOV byte [RAX+offset_fin], FALSE
+	
+	MOV [RDX+offset_sig], RAX
 
+	RET
 
+.noHayAnterior:
+	
+	Mov r13, rdi ; muevo el siguiente
+	MOV r14, rdx; muevo el anterior
+	MOV R15, rsi; muevo el caracter
+	MOV RDI, size_nodo ; le doy el tamaño al nodo
+	CALL malloc
+	
+	MOV [RAX+offset_sig], R13
+	MOV qword [RAX+offset_hijos], NULL
+	MOV [RAX+offset_c], R15
+	MOV byte [RAX+offset_fin], FALSE
 
-
-
-
-
-
-
+	RET
+	
+	
 trie_agregar_palabra:
 ;void trie_agregar_palabra(trie *t, char *p)
-		PUSH RBP
-	MOV RBP,RSP
+	push rbp ; Pila des
+	mov rbp, rsp
+	sub rbp,8; al
+	MOV RDI,[RDI]; 
+	MOV RSI, [RSI]
+	call insertar_nodo_en_nivel
+	CMP qword[RDI + offset_hijos], NULL
+	JNE .sigoAgregando
+	call .nuevosNiveles
+	pop rbp
+	add rbp,8
+	ret
 	
-	; COMPLETAR AQUI EL CODIGO
+.sigoAgregando:
+	
+	CMP byte [RSI+1], 0
+	JE .elUltimo
+	LEA RDI, [RDI + offset_hijos]
+	MOV RSI, [RSI+1]
+	add rbp,8
+	pop rbp
+	call trie_agregar_palabra
+	ret
 
-	RET
+.elUltimo:
+	;rdi el trie
+	;rsi el *char
+	MOV R15, RDI
+	MOV RDI, size_nodo ; le doy el tamaño al nodo
+	CALL malloc
+	
+	MOV qword[Rax+offset_sig], NULL
+	MOV qword [Rax+offset_hijos], NULL
+	MOV [RAX+offset_c], RSI
+	MOV byte [RAX+offset_fin], TRUE
+	
+	MOV [R15+offset_hijos],RAX
+	add rbp,8
+	pop rbp
+	ret
+	
+.nuevosNiveles:
+	CMP byte [RSI+1], 0
+	JE .elUltimo
+	MOV RSI, [RSI+1]
+	
+	;rdi el trie
+	;rsi el *char
+	MOV R15, RDI
+	MOV RDI, size_nodo ; le doy el tamaño al nodo
+	CALL malloc
+	
+	MOV qword[Rax+offset_sig], NULL
+	MOV qword [Rax+offset_hijos], NULL
+	MOV [RAX+offset_c], RSI
+	MOV byte [RAX+offset_fin], TRUE
+	
+	MOV [R15+offset_hijos],RAX
+	add rbp,8
+	pop rbp
+	ret
+
 	
 trie_construir:
 ;trie *trie_construir(char *nombre_archivo)
-		PUSH RBP
-	MOV RBP,RSP
-	
-	; COMPLETAR AQUI EL CODIGO
-
-	POP RBP
-	RET
 	
 trie_imprimir:
 ;void trie_imprimir(trie *t, char *nombre_archivo)
 	push rbp ; Pila Alineada
 	mov rbp, rsp
 	push r12 ; Pila Desalineada
-	push r13 ; Pila Alineada
-
+	push r15 ; Pila Alineada
+	sub rbp, 8
+	
 	mov r12, rsi ; Archivo
-	mov r13, rdi ; trie
+	mov r15, rdi ; TRIE
 
 	mov rdi, r12
 	mov rsi, modoFOpen ; seteo el modo de abrir el arvhivo
 	call fopen
 
 	mov r12, rax ; Guardo el puntero al archivo abierto
-
-	cmp qword [r13], NULL
-	je .esVacia
 	
+	cmp qword [r15 + offset_c], NULL
+	JNE .noEsVacia
+;	mov r13, [r15]
+
 .esVacia:
 
 	mov rdi, r12
@@ -262,7 +349,7 @@ trie_imprimir:
 .terminarArchivo:
 
 	mov rdi, r12
-	mov rsi, saltoLinea
+	mov rsi, saltoDeLinea
 	mov rdx, stringVacio
 	mov rax, 1
 	call fprintf
@@ -270,62 +357,49 @@ trie_imprimir:
 	mov rdi, r12
 	call fclose
 
-	pop r13
+	ADD rbp,8
+	pop r15
 	pop r12
 	pop rbp	
 	ret
 
-; ~ void rama_imprimir(nodo_t *self, char *archivo)
-rama_imprimir:
+.noEsVacia:
 
-	push rbp ; Pila Alineada
-	mov rbp, rsp
-	push r12 ; Pila Desalineada
-	push r13 ; Pila Alineada
-
-	mov r12, rsi ; Archivo
-	mov r13, rdi ; Nodo
+	mov rdi, r15 ; Nodo
+	mov rsi, r12 ; Puntero al archivo
+	;call rama_imprimir ; Imprime al nodo con todos sus hijos
 	
+	cmp qword [r15 + offset_sig], NULL
+	je .terminarArchivo
 	mov rdi, r12
-	mov rsi, abreLLave
+	mov rsi, espacio
 	mov rax, 1
 	call fprintf
-
-.cerrar:
-
-	mov rdi, r12
-	mov rsi, cierraLLave
-	mov rax, 1
-	call fprintf
-
-	pop r13
-	pop r12
-	pop rbp
-	ret
+	
+	mov r15, [r15 + offset_sig]
+	jmp .noEsVacia
 
 
 
 
 
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
 
 buscar_palabra:
-		PUSH RBP
-	MOV RBP,RSP
-
-	; COMPLETAR AQUI EL CODIGO
-POP RBP
-	RET
+	
 trie_pesar:
-		PUSH RBP
-	MOV RBP,RSP
-
-	; COMPLETAR AQUI EL CODIGO
-POP RBP
-	RET
+	
 palabras_con_prefijo:
-		PUSH RBP
-	MOV RBP,RSP
-
-	; COMPLETAR AQUI EL CODIGO
-POP RBP
-	RET
+	
