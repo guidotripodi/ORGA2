@@ -337,7 +337,6 @@ trie_imprimir:
 	
 	cmp qword [r15 + offset_c], NULL
 	JNE .noEsVacia
-;	mov r13, [r15]
 
 .esVacia:
 
@@ -367,7 +366,7 @@ trie_imprimir:
 
 	mov rdi, r15 ; Nodo
 	mov rsi, r12 ; Puntero al archivo
-	;call rama_imprimir ; Imprime al nodo con todos sus hijos
+	call rama_imprimir ; Imprime al nodo con todos sus hijos
 	
 	cmp qword [r15 + offset_sig], NULL
 	je .terminarArchivo
@@ -378,6 +377,80 @@ trie_imprimir:
 	
 	mov r15, [r15 + offset_sig]
 	jmp .noEsVacia
+
+
+rama_imprimir:
+
+	push rbp ; Pila Alineada
+	mov rbp, rsp
+	push r12 ; Pila Desalineada
+	push r13 ; Pila Alineada
+
+	mov r12, rsi ; Archivo
+	mov r13, rdi ; Nodo
+	
+	mov rdi, r12
+	mov rsi, abreLLave
+	mov rax, 1
+	call fprintf
+
+.imprimirDescendientes:
+
+	mov rdi, r13
+	mov rsi, r12
+	call nodo_imprimir
+	
+	cmp qword [r13 + offset_hijo], NULL
+	je .cerrar
+	mov r13, [r13 + offset_hijo]
+	jmp .imprimirDescendientes
+
+.cerrar:
+
+	mov rdi, r12
+	mov rsi, cierraLLave
+	mov rax, 1
+	call fprintf
+
+	pop r13
+	pop r12
+	pop rbp
+	ret
+
+; ~ void nodo_imprimir(nodo_t *self, char *archivo)
+nodo_imprimir:
+
+	push rbp ; Pila Alineada
+	mov rbp, rsp
+	push r12 ; Pila Desalineada
+	push r13 ; Pila Alineada
+
+	mov r12, rsi ; Guardo el puntero al archivo
+	mov r13, rdi ; Guardo el puntero al nodo
+	
+	mov rdi, r12
+	mov rsi, abreCorchete
+	mov rax, 1
+	call fprintf
+
+	mov rdi, r12
+	mov rsi, printInt
+	mov rdx, [r13 + offset_c]
+	mov rax, 1
+	call fprintf
+	jmp .cerrar
+
+.cerrar:
+
+	mov rdi, r12
+	mov rsi, cierraCorchete
+	mov rax, 1
+	call fprintf
+
+	pop r13
+	pop r12
+	pop rbp
+	ret
 
 
 
