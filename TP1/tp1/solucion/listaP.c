@@ -2,7 +2,6 @@
 #include <string.h>
 
 #include "listaP.h"
-#include <stdio.h>
 
 listaP *lista_crear() {
     listaP *ls = malloc(sizeof *ls);
@@ -19,7 +18,6 @@ void lista_agregar(listaP *ls, const char *palabra) {
 
     lsnodo *n = malloc(sizeof *n);
     n->valor = new;
-//    printf("Agrego: %s\n", n->valor);
     n->sig = NULL;
 
     if (ls->prim == NULL) {
@@ -35,7 +33,6 @@ void lista_borrar(listaP *ls) {
     lsnodo *n = ls->prim;
 
     while (n != NULL) {
-//        printf("Libero: %s\n", n->valor);
         free(n->valor);
         lsnodo *oldn = n;
         n = n->sig;
@@ -45,10 +42,6 @@ void lista_borrar(listaP *ls) {
 }
 
 void lista_concatenar(listaP *xs, listaP *ys) {
-    if (ys->prim == NULL) {
-        free(ys);
-        return;
-    }
     if (xs->prim == NULL) {
         xs->prim = ys->prim;
     } else {
