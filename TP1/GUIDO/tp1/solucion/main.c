@@ -12,21 +12,39 @@ extern nodo *insertar_nodo_en_nivel(nodo **nivel, char c);
 extern void trie_agregar_palabra(trie *t, char *p);
 extern bool buscar_palabra(trie *t, char *p);
 extern nodo *nodo_buscar(nodo *n, char c);
+extern trie *trie_construir(char *nombre_archivo);
+
 
 int main(void) {
 	// COMPLETAR AQUI EL CODIGO
 	trie* t = trie_crear();
 	//nodo* n = nodo_crear('a');
-	char* e = "hola";
-	trie_agregar_palabra(t,e);
 	char* nombre_archivo = "andaporfavor.txt";
-	char* e1 = "ala";
-	//char* e2 = "alambre";
+	char* e1 = "hola";
+	char* e2 = "casa";
 	trie_agregar_palabra(t,e1);
-	//trie_agregar_palabra(t,e2);
+	char* e = "casco";
+	char* e3 = "apa";
+	trie_agregar_palabra(t,e);
+	trie_agregar_palabra(t,e2);
+	trie_agregar_palabra(t,e3);
 	trie_imprimir(t,nombre_archivo);
-	bool b = true;//buscar_palabra(t,e1);
-		printf("Valor: %d",b);
+	bool b = buscar_palabra(t,e1); 
+	trie_construir(nombre_archivo);
+
+
+	char buffer[1025];
+ 	FILE *fp;
+ 	fp = fopen ( "andaporfavor.txt", "r" );
+  	fscanf(fp, "%s" ,buffer);
+ 	printf("%s",buffer);
+ 	fscanf(fp, "%s" ,buffer);
+ 	printf("%s",buffer);
+  	fclose ( fp );
+	
+
+
+	printf("Valor: %d",b);
 	
 
     return 0;
