@@ -22,26 +22,20 @@ extern feof
 extern lista_crear
 extern lista_agregar
 extern lista_concatenar
+extern lista_borrar
 
 ;etiquetas para impresion 
 
 modoFOpen: db "a", 0
 modoFOpenRead: db "r", 0
-abreLLave: db "{ ", 0
-cierraLLave: db " }", 0
-abreCorchete: db "[ ", 0
-cierraCorchete: db" ]", 0
 espacio: db " ", 0
 stringVacio: db "", 0
 string: DB '%c', 0
 string1: DB '%s', 0
 trieVacio: db "<>", 0
 saltoDeLinea: DB '%s', 10, 0
+fin: DB "", 03,0
 vacio: DB '', 0
-llaveAbrir: DB '{ ', 0
-llaveCerrar: DB ' }', 0
-corcheteAbrir: DB '[ ', 0
-corcheteCerrar: DB ' ]', 0
 float1: DD 1.00000000000000000001
 
 
@@ -84,9 +78,6 @@ trie_crear:
 	MOV rdi, size_trie
 	CALL malloc
 	MOV qword[rax], NULL
-;	MOV r15, RAX
-	
-	
 	POP rbp
 	ret
 	
@@ -100,7 +91,7 @@ trie_borrar:
 	cmp qword [r12], NULL
 	je .borrarTrieVacio
 	mov rdi, [r12]
-	call borrarTrieNoVacio
+	jmp .borrarTrieNoVacio
 
 .borrarTrieVacio:
 	mov rdi, r12
@@ -111,26 +102,19 @@ trie_borrar:
 	ret
 
 ; ~ void borrarTrieNoVacio(nodo_t *self) si no esta vacio el trie voy nodo por nodo
-borrarTrieNoVacio:
-	push rbp ; Pila Alineada
-	mov rbp, rsp
-	push r12 ; Pila Desalineada
-	sub rsp, 8 ; Pila Alineada
+.borrarTrieNoVacio:
 	mov r12, rdi
 	cmp qword [r12 + offset_sig], NULL
-	je .borrarActual
+	je .borrarRama
 	mov rdi, [r12 + offset_sig]
-	call borrarTrieNoVacio
+	jmp .borrarTrieNoVacio
 
-.borrarActual:
+.borrarRama:
 	mov rdi, r12
 	call borroConHijos
-	add rsp, 8
-	pop r12
-	pop rbp
+	
 	ret
 
-; ~ void borroConHijos(nodo_t *self) hago recursion en los nodos hijos de la supuesta palabra
 borroConHijos:
 	push rbp ; Pila Alineada
 	mov rbp, rsp
@@ -142,7 +126,7 @@ borroConHijos:
 	je .borrarActual
 	
 	mov rdi, [r12 + offset_hijos]
-	call borroConHijos
+	jmp borroConHijos
 
 .borrarActual:
 
@@ -162,10 +146,12 @@ nodo_borrar:
 	push r12 ; Pila Desalineada
 	sub rsp, 8 ; Pila Alineada
 	call free
+	;MOV qword [R12],NULL
 	add rsp, 8
 	pop r12
 	pop rbp
 	ret
+
 
 nodo_crear:
 ;nodo *nodo_crear(char c)
@@ -179,27 +165,56 @@ nodo_crear:
 	
 	MOV qword [RAX], NULL ; el siguiente nodo a este es NULL
 	MOV qword [RAX+offset_hijos], NULL ; como estoy creando un nodo no tengo hijo = NULL
+	jmp .caracterValido
+.sigo:
 	MOV [RAX + offset_c], BL, ;guardo el char
 	MOV byte[RAX + offset_fin], FALSE; palabra no termina
-	
-	
+	jmp .fin
+
+
+	.caracterValido:
+	CMP byte BL, 61h
+	JL .veoSiEsNumero
+	CMP byte BL, 7Ah
+	JL .sigo
+	XOR RBX, RBX
+	MOV byte BL, "a"
+	jmp .sigo
+
+.veoSiEsNumero:
+	CMP byte BL, 39h
+	JLE .veoSiEsNumero
+	XOR RBX, RBX
+	MOV byte BL, "a"
+	jmp .sigo
+
+.veoSiEsNumero1:
+	CMP byte BL, 30h
+	JGE .sigo
+	XOR RBX, RBX
+	MOV byte BL, "a"
+	jmp .sigo
+
+	.fin:
 	POP RBP
 	RET
+
+
 insertar_nodo_en_nivel:
 	;RDI DIRECCION DEL 1er NODO de ese nivel; esto apunta a hijos del padre
 	;RSI CHAR que tengo que agregar
 	push RBP
 	mov RBP, RSP
-	push RBX
 	push R13
 	push R14
 	push R15
+	sub rsp, 8
 	mov R13, RDI ; copio puntero del nodo
 	mov R14, R13 
 	mov RDI, RSI ;paso char a rdi para crear nodo
 	cmp qword [R13], NULL
 	je .nivelVacio ; en caso que mi trie inicie vacio o me pasen un puntero a hijos del padre null
-	;mov R14, [R14+offset_sig]
+	mov R14, [R14+offset_sig]
 	.ciclo:
 		cmp [R14 + offset_c], SIL; si es igual lo doy y temine
 		je .noAgrego
@@ -213,14 +228,15 @@ insertar_nodo_en_nivel:
 		mov R14, [R14+offset_sig]
 		jmp .ciclo
 		
-	
 	.noAgrego:
 		mov RAX, R14
 		jmp .fin
 	.agregoPrimero:
 		call nodo_crear ;en RAX tengo el nuevo nodo
-		mov [RAX+offset_sig], R14 ;el siguiente de rax es el primero del nivel original
-		mov [R13+offset_hijos] , RAX  ;el papa del nivel apunta al nuevo nodo ahora
+		mov [RAX+offset_sig], R14
+		;Mov [R13 + offset_hijos], RAX
+		;LEA R13, [RAX + offset_sig]
+		MOV [R13], rax
 		jmp .fin
 	.agregoUltimo:
 		call nodo_crear ;en RAX tengo el nuevo nodo
@@ -236,48 +252,55 @@ insertar_nodo_en_nivel:
 		mov [R13], RAX
 		
 	.fin:
+		add rsp,8
 		pop R15
 		pop R14
 		pop R13
-		pop RBX
 		pop RBP
 		ret
 	
 
 trie_agregar_palabra:
-	;void trie_agregar_palabra(trie *t, char *p)
-	;RDI tengo el puntero a trie
-	;RSI tengo el puntero a char, palabra a agregar
-	push RBP ; pila al
-	mov RBP, RSP
-	push RBX ; pila des
-	Push R13 ;pila al
-	mov R13, RSI ;copio el puntero a char de RSI a R13
-	
-	.agregoPalabra:
-	XOR rsi, rsi
-	mov byte SIL, [R13]
-	CMP byte SIL, NULL
-	je .fin
-	call insertar_nodo_en_nivel ; recibo en rax el nodo insertado
+	PUSH RBP
+	MOV RBP, RSP
+	PUSH R12
+	PUSH R13
 
-	lea RDI, [RAX+offset_hijos] ; voy al nivel de abajo
-	MOV RSI, R13
-	lea R13, [RSI+1] ; voy a la siguiente letra a agregar
+	
+	MOV R12, RDI								; guardo en R12 trie*
+	MOV R13, RSI								; guardo en R13 char*
 	XOR RSI, RSI
-	MOV byte SIL, [R13]
-	cmp byte SIL, NULL
-	jne .agregoPalabra
-	MOV QWORD [RAX+offset_fin], TRUE ;si llego al final del puntero del string de palabra termino palabra
+	MOV byte SIL, [R13]								; guardo en SIL el primer char
+	CMP byte SIL, NULL								; veo si me pasaron string vacio
+	JE .fin
+			CMP qword[R12 + offset_raiz], NULL		; veo si el trie esta vacio
+			JNE .trie_no_vacio
+			XOR RDI, RDI						; limpio RDI
+			MOV DIL, SIL						; pongo en DIL el char para nodo_crear
+			CALL nodo_crear
+			MOV [R12 + offset_raiz], RAX		; pongo el nuevo nodo como raiz del trie
+			LEA RDI, [RAX  + offset_hijos]		; R8: n (nodo*) a raiz
+			JMP .agregoHijos
+	.trie_no_vacio:
+			CALL insertar_nodo_en_nivel
+			LEA RDI, [RAX + offset_hijos]							
+	.agregoHijos:
+			ADD r13, 1
+			XOR RSI, RSI
+			MOV SIL, [R13]
+			CALL insertar_nodo_en_nivel
+			LEA RDI, [RAX + offset_hijos]
+			CMP byte[R13 + 1], 0			
+			JNE .agregoHijos
+			MOV byte[RAX + offset_fin] , TRUE		
 	
-	.fin:
-	pop R13
-	pop RBX
-	pop RBP
-	ret
+.fin:
+	POP R13
+	POP R12
+	POP RBP
+	RET
 
 
-	
 trie_imprimir:
 ;void trie_imprimir(trie *t, char *nombre_archivo)
 	push rbp ; Pila Alineada
@@ -304,52 +327,38 @@ trie_imprimir:
 	mov rsi, trieVacio
 	mov rax, 1
 	call fprintf
-	jmp .terminarArchivo
+	jmp .terminarArchivo1
 
 .noEsVacia:
 	call lista_crear
 	MOV R14, RAX ;ME GUARDO LA LISTA CREADA Q SE VA A IMPRIMIR
+	MOV R13, RAX; ME GUARDO EL PUNTERO PARA ELIMINARLO
 	MOV R15, [R15+offset_sig]
-	jmp .punteroParaPrefijo
 .ciclo:
 	XOR RSI, RSI
-	MOV SIL, [R15+offset_c]
-	MOV byte [R11], SIL
+	LEA RSI, [R15+offset_c]
 	MOV RDI, R15
-	MOV RSI, R11
 	call palabras_con_prefijo
 	MOV RDI, R14 ; paso putnero a la lista creada para imprimir
 	MOV RSI, RAX ;LISTA DE palabras_con_prefijo
-	PUSH R11 ; LO GUARDO ACA POR LA CONVENCION SINO SE PIERDE
-	SUB RBP, 8
 	call lista_concatenar
-	ADD RBP,8
-	POP R11
+	MOV RDI, RAX ;vuelo la lista q me dio palabras_con_prefijo xq ya la concate 
+	CALL free
 	MOV RDI, R15
 	CMP qword[R15 + offset_sig], NULL
-	JE .eliminoPuntero
+	JE .recorroParaImprimir
 	MOV R15,[R15 +offset_sig]
-	ADD R13,1
 	jmp .ciclo
 
-			.punteroParaPrefijo:
-				MOV RDI, 1
-				call malloc
-				MOV qword [RAX], NULL ;inicializo puntero NULL
-				MOV R11, RAX ;GUARDO EL PUNTERO CREADO
-				jmp .ciclo
-
-					.eliminoPuntero:
-						MOV RDI, R11
-						call free
 				.recorroParaImprimir:
 					MOV R14,[R14 +offset_prim] 
 					XOR r15,r15
-					XOR RBX, RbX
-					LEA RBX, [R14 + offset_valor]
-					MOV r15, [RBX] ;esto me da un puntero a char
-					jmp .imprimirCharDePalabra
-					.sigoEnLaLista:
+					mov rdi, r12
+					mov rsi, string1
+					mov rdx, [r14 + offset_valor]
+					mov rax, 1
+					call fprintf
+				.sigoEnLaLista:
 					mov rdi, r12
 					mov rsi, espacio
 					mov rax, 1
@@ -359,20 +368,7 @@ trie_imprimir:
 					LEA R14,[R14 +offset_sig_lnodo] 
 					jmp .recorroParaImprimir
 
-						.imprimirCharDePalabra:
-							;XOR RSI, RSI
-							mov rdi, r12
-							mov rsi, string
-							mov rdx, [r15]
-							mov rax, 1
-							call fprintf
-							CMP byte [r15+1], 0
-							JE .sigoEnLaLista
-							LEA r15, [r15+1]
-							jmp .imprimirCharDePalabra
-
-
-					
+										
 	.terminarArchivo:
 
 	mov rdi, r12
@@ -380,6 +376,27 @@ trie_imprimir:
 	mov rdx, stringVacio
 	mov rax, 1
 	call fprintf
+
+
+	mov rdi, r12
+	call fclose
+
+	MOV RDI, R13
+	CALL lista_borrar
+
+	pop r15
+	pop r12
+	pop rbp	
+	ret
+
+.terminarArchivo1:
+
+	mov rdi, r12
+	mov rsi, saltoDeLinea
+	mov rdx, stringVacio
+	mov rax, 1
+	call fprintf
+
 
 	mov rdi, r12
 	call fclose
@@ -390,13 +407,12 @@ trie_imprimir:
 	ret
 
 
-
 buscar_palabra:
 ;bool buscar_palabra(trie *t, char *p)
 	PUSH RBP
 	MOV RBP, RSP
 	PUSH R15
-	PUSH R14
+	SUB RSP, 8
 	CMP QWORD [RDI], NULL
 	JE .noEsta
 	MOV R15, RSI  ;COPIO EL PUNTERO
@@ -407,15 +423,11 @@ buscar_palabra:
 	call nodo_buscar 
 	CMP byte RAX, NULL ;si no esta un nodo termino
 	JE .noEsta
-	;CMP byte [RAX+ offset_c], NULL ;si no esta un nodo termino
-	;JE .noEsta
-	;MOV RDI, [RDI +offset_sig]
-	;MOV R14, [R15+1]  ; voy a la siguiente letra a buscar
 	cmp byte [r15+1], NULL
 	JNE .siguePalabra
 .siEsta:
 	MOV qword RAX, TRUE
-	POP R14
+	ADD RSP,8
 	POP R15
 	POP RBP
 	RET
@@ -431,8 +443,7 @@ buscar_palabra:
 
 .noEsta:
 	MOV qword RAX, FALSE
-	;ADD RBP,8
-	POP R14
+	ADD RSP,8
 	POP R15
 	POP RBP
 	RET
@@ -442,10 +453,12 @@ nodo_buscar:
 	PUSH RBP
 	MOV RBP,RSP
 	PUSH R15
-	SUB RBP,8
+	SUB RSP,8
 	MOV R15, RDI
 	CMP qword R15, NULL
 	JE .fin
+	CMP byte RSI, NULL
+	JE .noHayChar
 	.seguimos:
 		CMP [R15 + offset_c], SIL
 		JE .fin
@@ -454,12 +467,16 @@ nodo_buscar:
 		MOV R15, [r15 + offset_sig]
 		jmp .seguimos
 
+	.noHayChar:
+		mov r15, NULL
+		jmp .fin
+
 	.noEsta:
 		MOV R15, [R15 + offset_sig]
 		jmp .fin
 	.fin:
 		MOV RAX, r15 ;devuelvo null o el nodo
-		ADD RBP, 8
+		ADD RSP, 8
 		POP R15
 		POP RBP
 		ret
@@ -477,90 +494,61 @@ trie_pesar:
 	MOV R15, RDI
 	MOV R13, RSI
 	CMP qword R15, NULL
-	JE .terminarArchivo
+	JE .terminarArchivo1
 	call lista_crear
 	MOV R14, RAX ;ME GUARDO LA LISTA CREADA Q SE VA A IMPRIMIR
+	MOV RBX, RAX ;ME GUARDO ESTE REGISTRO PARA VOLAR LA LISTA CUANDO TERMINO
+	MOV R12,RAX
 	MOV R15, [R15+offset_sig]
-	XOR R10, R10
 	XOR R12, R12
 	xorpd xmm0, xmm0
 	xorpd xmm2, xmm2
-	jmp .punteroParaPrefijo
 .ciclo:
 	XOR RSI, RSI
-	MOV SIL, [R15+offset_c]
-	MOV byte [R11], SIL
+	LEA RSI, [R15+offset_c]
 	MOV RDI, R15
-	MOV RSI, R11
 	call palabras_con_prefijo
 	MOV RDI, R14 ; paso putnero a la lista creada para imprimir
 	MOV RSI, RAX ;LISTA DE palabras_con_prefijo
-	PUSH R11 ; LO GUARDO ACA POR LA CONVENCION SINO SE PIERDE
-	PUSH R10
 	call lista_concatenar
-	POP R10
-	POP R11
 	MOV RDI, R15
 	CMP qword[R15 + offset_sig], NULL
-	JE .recorroParaImprimir
+	JE .aLaBalansa
 	MOV R15,[R15 +offset_sig]
-	ADD R13,1
 	jmp .ciclo
 
-			.punteroParaPrefijo:
-				MOV RDI, 1
-				PUSH R11 ; LO GUARDO ACA POR LA CONVENCION SINO SE PIERDE
-				PUSH R10
-				call malloc
-				POP R10
-				POP R11
-				MOV qword [RAX], NULL ;inicializo puntero NULL
-				MOV R11, RAX ;GUARDO EL PUNTERO CREADO
-				jmp .ciclo
-
-				.recorroParaImprimir:
+				.aLaBalansa:
 					MOV R14,[R14 +offset_prim] 
-					XOR r15,r15
-					XOR RBX, RbX
-					LEA RBX, [R14 + offset_valor]
-					MOV r15, [RBX] ;esto me da un puntero a char
 					jmp .sacarPesoYSumar
 					.sigoEnLaLista:
 					CMP qword [r14 +offset_sig_lnodo], NULL 
 					je .promedio
 					LEA R14,[R14 +offset_sig_lnodo] 
-					jmp .recorroParaImprimir
+					jmp .aLaBalansa
 
 						.sacarPesoYSumar:
-							;XOR RSI, RSI
 							xorpd xmm1, xmm1
-							mov rdi, r15
-							mov rsi, r15
-							PUSH R10
-							SUB RBP,8
+							mov rdi, [R14 + offset_valor]
 							call R13
-							ADD RBP,8
-							POP R10 
 							movq XMM1, RAX
-							addsd XMM2, XMM1
-							add R10, 1
+							addpd XMM2, XMM1
+							add R12, 1
 							Jmp .sigoEnLaLista
 
 					.promedio:
 						xorpd xmm3, xmm3
-						movq XMM3, R10
+						movq XMM3, R12
 						CVTDQ2PD XMM1, XMM3
 						divpd xmm2, xmm1
 										
-					;.eliminoPuntero:
-					;	MOV RDI, R11
-					;	call free
-					;	jmp .terminarArchivo
 
 
 .terminarArchivo:
 
 	movq xmm0, XMM2
+
+	MOV RDI, RBX
+	call lista_borrar
 
 	pop r13
 	pop r15
@@ -568,7 +556,19 @@ trie_pesar:
 	ret
 
 
+.terminarArchivo1:
+	
+	xorpd xmm3, xmm3
+	xor r10,R10
+	MOV R10, 0
+	movq XMM3, R10
+	CVTDQ2PD XMM1, XMM3
+	movq xmm0, xmm1			
 
+	pop r13
+	pop r15
+	pop rbp	
+	ret
 
 palabras_con_prefijo:
 	;listaP *palabras_con_prefijo(trie *t, char *prefijo)
@@ -587,13 +587,9 @@ palabras_con_prefijo:
 	PUSH R13
 	PUSH R12
 	PUSH R11
-	PUSH R10
-	PUSH RCX
 	PUSH RBX
-	XOR R9, R9
-	XOR R8,R8
-	PUSH R9
-	PUSH R8
+	;SUB RSP,8
+
 	MOV R14, RDI
 	MOV R15, RSI
 	CMP qword RSI, NULL
@@ -604,119 +600,37 @@ palabras_con_prefijo:
 	MOV R13, RAX
 	call lista_crear 
 	MOV RBX, RAX
-	LEA R13, [R13 + offset_hijos]
-	jmp .punteroParaPalabra
-	.ciclo:
-		XOR R14,R14
-		MOV R13, [R13 + offset_sig]
-		CMP qword R13, NULL
-		JE .elPrefijoEsPalabra
-		MOV R14, R13
-		jmp .armoPalabra
-	.terminoCiclo:
-		CMP qword [R13 + offset_sig], NULL
-		JE .borroPunteroCreado
-		LEA R13,[R13 + offset_sig]
-		jmp .ciclo
+	MOV RDI, 1024
+	CALL malloc
+	MOV R14, RAX
+	MOV R12, RAX
+	jmp .recorroPrefijo
+.sigo:
+	MOV RDI, R13
+	MOV RSI, RBX
+	MOV RDX, R12
+	CALL dame_palabras
+	;MOV RAX, RSI
 
-		.armoPalabra:
-			XOR R11, R11
-			MOV R11, [R14 + offset_c] ; le copio el caracter 
-			CMP qword [R14 + offset_sig], NULL
-			JNE .guardoElDeAlLado
-		.sigo:
-			MOV [R12], R11
-			CMP byte[R14 + offset_fin], TRUE
-			JE .unionALista
-			add r12,1 
-			MOV R14,[R14 + offset_hijos]
-			jmp .armoPalabra
+	MOV RDI, R12
+	CALL free
+	MOV qword [R12] , NULL				; libero la memo de 1024 que use para el prefijo
+	mov rax, RBX
+	jmp .fin
 
-			.unionALista:
-					MOV byte [R12 +1], 0
-					MOV RDI, RBX ; COPIO EL PUNTERO A LA LISTA
-					MOV RSI, R10
-					PUSH R10
-					SUB RBP,8
-					call lista_agregar
-					ADD RBP, 8
-					POP R10
-					MOV RBX, RAX
-					CMP byte [r14 + offset_hijos], NULL
-					JNE .sigoBajando
-					pop R8
-					pop R9
-					CMP qword r8, NULL
-					JNE .meCorroALsiguiente
-					jmp .terminoCiclo
+.recorroPrefijo:
+		XOR r11,r11
+		MOV r11, [R15]
+		MOV [R14], r11
+		LEA r14,[R14 +1] 
+		CMP byte [R15+1], 0 ; si termina me quedo con el prefijo para ir juntando las palabras mas facil
+		JE .sigo
+		ADD R15, 1
+		jmp .recorroPrefijo
 
-			.sigoBajando:
-				MOV R14,[R14 + offset_hijos]
-				ADD R12, 1
-				jmp .armoPalabra
-
-			.meCorroALsiguiente:
-				MOV R14,R8
-				mov r12, R9
-				jmp .armoPalabra
-
-			.guardoElDeAlLado:
-				MOV R9, R12
-				MOV R8, [R14 + offset_sig]
-				PUSH R9
-				PUSH R8
-				jmp .sigo
-
-				.elPrefijoEsPalabra:
-					MOV byte [R12 +1], 0
-					MOV RDI, RBX ; COPIO EL PUNTERO A LA LISTA
-					MOV RSI, R10
-					PUSH R10
-					SUB RBP,8
-					call lista_agregar
-					ADD RBP, 8
-					POP R10
-					POP R8
-					POP R9
-					JMP .borroPunteroCreado
-		.borroPunteroCreado:
-		;	MOV RDI, R10
-		;	call free
-			jmp .fin		
-
-	.punteroParaPalabra:
-			PUSH RBX
-			PUSH R13
-			MOV RDI, 1025
-			;MOV RSI, 1025
-			Call malloc ;creo el puntero para las palabras
-			MOV R12, RAX
-			MOV R10, R12
-			POP R13
-			POP RBX
-			jmp .recorroElPrefijo
-
-			.recorroElPrefijo:
-				XOR r14,r14
-				MOV r14, [R15]
-				MOV [R12], r14
-				LEA r12,[R12 +1] 
-				CMP byte [R15+1], 0 ; si termina me quedo con el prefijo para ir juntando las palabras mas facil
-				JE .ciclo
-				ADD R15, 1
-				jmp .recorroElPrefijo
-
-		.listaVacia:
-		call lista_crear 
-		MOV RBX, RAX ;GUARDO EL PUNTERO A LA LISTA CREADA
-		POP R8
-		POP R9
-		jmp .fin
-
-	.fin:
+.fin:	
+	;ADD RSP, 8
 	POP RBX
-	POP RCX
-	POP R10
 	POP R11
 	POP R12
 	POP R13
@@ -724,6 +638,99 @@ palabras_con_prefijo:
 	POP R15
 	POP RBP
 	RET
+
+
+
+	.listaVacia:
+	call lista_crear 
+	MOV RBX, RAX ;GUARDO EL PUNTERO A LA LISTA CREADA
+	jmp .fin
+
+
+
+
+	dame_palabras:
+; PARAMETROS RECIBIDOS
+	; RDI: nodo* (ultimo)
+	; RSI: listaP* (lista)	
+	; RDX: char* (pref)		; para agregar como prefijo de cada palabra que encuentre
+	PUSH RBP
+	MOV RBP, RSP
+	PUSH R12
+	PUSH R13
+	PUSH R14
+	PUSH R15
+	
+	MOV R12, RDI						; R12: ultimo
+	MOV R13, RDX						; R13: pref
+	;tamanio_prefijo
+	MOV RDI, R13
+	XOR RCX, RCX
+	NOT RCX
+	XOR AL, AL
+	CLD
+	REPNE SCASB
+	NOT RCX
+	DEC RCX					
+	MOV R15, RCX						; R15: tamanio de prefijo
+	MOV R14, RSI						; R14: lista
+	;if (ultimo != NULL){
+	CMP R12, NULL
+	JE .fin
+		;nodo* actual = ultimo->hijos;
+		MOV R12, [R12 + offset_hijos]	; R12: actual
+		;if (actual != NULL){
+		CMP R12, NULL
+		JE .fin
+			;if (actual->fin == 1){
+			CMP byte[R12 + offset_fin], 1
+			JNE .buscar_actual
+				;lista_agregar(lista, concatenate(pref, actual->c));}
+						;concatenate(pref, actual->c)					
+						XOR RSI, RSI
+						MOV SIL, byte[R12 + offset_c]					
+						MOV byte[R13 + R15], SIL
+						MOV byte[R13 + R15 + 1], 0
+					
+					MOV RDI, R14
+					MOV RSI, R13
+					CALL lista_agregar
+					
+			.buscar_actual:
+			;buscar_palabras(actual, lista, concatenate(pref, actual->c));
+			;R8 = concatenate(pref, actual->c)
+				XOR RSI, RSI
+				MOV SIL, byte[R12 + offset_c]					
+				MOV byte[R13 + R15], SIL
+				MOV byte[R13 + R15 + 1], 0
+			MOV RDI, R12
+			MOV RSI, R14
+			MOV RDX, R13
+			CALL dame_palabras
+			
+			;if (actual->sig != NULL){
+			CMP qword[R12 + offset_sig], NULL
+			JE .fin
+				;buscar_palabras(actual->sig, lista, concatenate(pref, actual->sig->c));}}}}
+					;R8 = concatenate(pref, actual->sig->c)
+					MOV RDI, [R12 + offset_sig]			; RDI: actual->sig
+					XOR RSI, RSI
+					MOV SIL, byte[RDI + offset_c]					
+					MOV byte[R13 + R15], SIL
+					MOV byte[R13 + R15 + 1], 0
+				MOV RSI, R14
+				MOV RDX, R13
+				CALL dame_palabras
+				
+.fin:
+	POP R15
+	POP R14
+	POP R13
+	POP R12
+	POP RBP
+	RET
+
+
 
 nodo_prefijo:
 ;nodo *nodo_prefijo(nodo *n, char *p)
@@ -734,7 +741,7 @@ nodo_prefijo:
 	PUSH R14
 	PUSH R15
 	PUSH R13
-	SUB RBP, 8
+	SUB RSP, 8
 	MOV R15, RDI ; COPIO *nodo
 	MOV R14, RSI ; copio *p
 	XOR RSI, RSI  ;vacio rsi para pasarle un char y buscarlo
@@ -754,6 +761,8 @@ nodo_prefijo:
 		CMP qword RAX, NULL
 		JE .fin
 		call nodo_buscar ;busco a partir del segundo caracter, el primero lo busco fuera del ciclo, si ingreso es q el primero esta
+		CMP qword RAX, NULL
+		JE .fin
 		CMP BYTE [R14 + 1], 0
 		JNE .sigoGirando
 		jmp .fin
@@ -766,7 +775,7 @@ nodo_prefijo:
 			jmp .ciclo
 
 .fin:
-	ADD RBP, 8
+	ADD RSP, 8
 	POP R13
 	POP R15
 	POP R14
@@ -798,15 +807,16 @@ trie_construir:
 	call fscanf
 	CMP BYTE [R12], 3ch
 	JE .trieVacio
- 	CMP byte [R12],10
-	JE .eliminoPuntero
+ 	CMP EAX,NULL
+	JLE .eliminoPuntero
 	jmp .agregarPalabra
 
 	
 .creoPuntero:
-	MOV RDI, 1025
+	MOV RDI, 1024
 	Call malloc ;creo el puntero para las palabras
 	MOV R12, RAX
+	MOV R14, RAX
 	jmp .continuo
 
 .trieVacio:
@@ -817,11 +827,6 @@ trie_construir:
 	cmp r13, NULL
 	je .trie
 .agrego:
-	MOV RDI, R13 ; TRIE
-	MOV RSI, r12
-	Call buscar_palabra
-	CMP qword RAX, FALSE
-	JNE .terminarArchivo
 	MOV RDI, R13
 	MOV RSI, R12
 	CALL trie_agregar_palabra
@@ -833,8 +838,10 @@ trie_construir:
 	JMP .agrego
 
 .eliminoPuntero:
-	MOV RDI, R12
+	MOV RDI, R14
 	CALL free
+	MOV qword [R14], NULL
+	
 
 	.terminarArchivo:
 	mov rdi, r15

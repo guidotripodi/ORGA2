@@ -1,44 +1,60 @@
 #include "trie.h"
 #include "listaP.h"
+#include <string.h>
+#include <stdlib.h>
 
-// Completar las funciones en C.
-
-listaP *predecir_palabras(trie *t, char *teclas) {
-	char* c = "            ";
-	return recorro(t,teclas,0, c);
-}
-
-listaP *recorro(trie *t,char* teclas, int i,char* c){
-	listaP* l1 = lista_crear();
-	int j;
-	int h;
-	while(teclas[i] != 0)
-	{
-		h = 0;
-		while((caracteres_de_tecla(teclas[i]))[h] != 0)
-			{	
-				j = 0;
-				if (teclas[i+1] == 0)
-				{	
-					while((caracteres_de_tecla(teclas[i]))[j] != 0){
-					c = (caracteres_de_tecla(teclas[i]))[j];
-					printf("valor: %c",c);
-					//l1 = palabras_con_prefijo(t,c);
-					//lista_concatenar(l1,recorro(t,teclas,i+1,c));
-					recorro(t,teclas,i+1,c);
-					j++;
-					}
-				}
-				else
-				{
-					c[i] = (caracteres_de_tecla(teclas[i]))[h];
-					recorro(t,teclas,i+1,c);
-				}
-			}
+listaP *predecir_palabras(trie *t, char *teclas) { 
+	int i = 0;
+	listaP* listaFinal = lista_crear();
+	char paraPrefijo[1024];
+	//pongo nulls en el paraprefijo
+	int h =0;
+	while(h < 1024){
+		paraPrefijo[h] = NULL;
+		h++;
 	}
-
-	return l1;
+	//char aux[1024];
+	listaP*  listaConPalabrasFinal = lista_crear();
+	listaConPalabrasFinal = recorrer(t, teclas, i, paraPrefijo, listaFinal);
+		
+	return listaConPalabrasFinal;
 }
+
+
+
+	listaP* recorrer(trie* t, char *teclas, int i, char *paraPrefijo, listaP* listaFinal){
+	while (i < strlen((teclas)))
+	{	
+		char* teclasrepresentadas = caracteres_de_tecla(teclas[i]);
+		if (i + 1 == strlen(teclas))
+		{
+			int j = 0;
+			while (j < strlen(teclasrepresentadas))
+				{
+					paraPrefijo[i] = teclasrepresentadas[j];
+					listaP* l1 = lista_crear();
+					l1 = palabras_con_prefijo(t,paraPrefijo);
+					lista_concatenar(listaFinal, l1);
+					//printf("%s\n", paraPrefijo);
+					j++;
+
+				}
+		}
+		else
+		{	
+			int j = 0;
+			while (j < strlen(teclasrepresentadas))
+				{
+					paraPrefijo[i] = teclasrepresentadas[j];
+					recorrer(t,teclas,i+1,paraPrefijo,listaFinal);
+					j++;
+				}
+		}
+		i++;
+	}
+	return listaFinal;
+}
+
 
 const char *caracteres_de_tecla(char tecla){
 	char* c;

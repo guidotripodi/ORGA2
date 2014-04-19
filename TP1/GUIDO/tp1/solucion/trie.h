@@ -35,7 +35,7 @@ bool buscar_palabra(trie *t, char *p);
 double trie_pesar(trie *t, double (*funcion_pesaje)(char*));
 listaP *palabras_con_prefijo(trie *t, char *pref);
 listaP *predecir_palabras(trie *t, char *teclas);
-listaP *recorro(trie *t,char* teclas, int i,char* c);
+listaP* recorrer(trie* t, char *teclas, int i, char *paraPrefijo, listaP* listaFinal);
 const char *caracteres_de_tecla(char tecla);
 
 #ifdef __cplusplus 
