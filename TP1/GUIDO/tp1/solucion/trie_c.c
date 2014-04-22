@@ -13,10 +13,9 @@ listaP *predecir_palabras(trie *t, char *teclas) {
 		paraPrefijo[h] = NULL;
 		h++;
 	}
-	//char aux[1024];
 	listaP*  listaConPalabrasFinal = lista_crear();
 	listaConPalabrasFinal = recorrer(t, teclas, i, paraPrefijo, listaFinal);
-		
+	lista_borrar(listaFinal);
 	return listaConPalabrasFinal;
 }
 
@@ -35,6 +34,7 @@ listaP *predecir_palabras(trie *t, char *teclas) {
 					listaP* l1 = lista_crear();
 					l1 = palabras_con_prefijo(t,paraPrefijo);
 					lista_concatenar(listaFinal, l1);
+					lista_borrar(l1);
 					//printf("%s\n", paraPrefijo);
 					j++;
 

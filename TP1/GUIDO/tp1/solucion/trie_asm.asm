@@ -37,6 +37,12 @@ saltoDeLinea: DB '%s', 10, 0
 fin: DB "", 03,0
 vacio: DB '', 0
 float1: DD 1.00000000000000000001
+modo_apertura: db "a", 0
+modo_read: db "r", 0
+format_string: db "%s", 0
+str_espacio: db " ", 0
+str_salto_linea: db 10, 0
+str_trie_vacio: db "<vacio>", 10, 0
 
 
 
@@ -61,6 +67,9 @@ float1: DD 1.00000000000000000001
 
 %define FALSE 0
 %define TRUE 1
+%define longitud_max_palabra 1024
+%define caracter_invalido 'a'
+
 
 section .rodata
 
@@ -82,223 +91,194 @@ trie_crear:
 	ret
 	
 trie_borrar:
-;void trie_borrar(trie *t)
-	push rbp ; Pila Alineada
-	mov rbp, rsp
-	push r12 ; Pila Desalineada
-	sub rsp, 8 ; Pila Alineada
-	mov r12, rdi
-	cmp qword [r12], NULL
-	je .borrarTrieVacio
-	mov rdi, [r12]
-	jmp .borrarTrieNoVacio
+push RBP
+	mov RBP, RSP
+	push R12
+	sub RSP, 8
 
-.borrarTrieVacio:
-	mov rdi, r12
-	call free
-	add rsp, 8
-	pop r12
-	pop rbp
-	ret
-
-; ~ void borrarTrieNoVacio(nodo_t *self) si no esta vacio el trie voy nodo por nodo
-.borrarTrieNoVacio:
-	mov r12, rdi
-	cmp qword [r12 + offset_sig], NULL
-	je .borrarRama
-	mov rdi, [r12 + offset_sig]
-	jmp .borrarTrieNoVacio
-
-.borrarRama:
-	mov rdi, r12
-	call borroConHijos
-	
-	ret
-
-borroConHijos:
-	push rbp ; Pila Alineada
-	mov rbp, rsp
-	push r12 ; Pila Desalineada
-	sub rsp, 8 ; Pila Alineada
-
-	mov r12, rdi
-	cmp qword [r12 + offset_hijos], NULL
-	je .borrarActual
-	
-	mov rdi, [r12 + offset_hijos]
-	jmp borroConHijos
-
-.borrarActual:
-
-	mov rdi, r12
+	mov R12, RDI ; R12 = trie*
+	cmp qword [R12 + offset_raiz], NULL ;si el trie esta vacio borro el trie unicamente
+	je .fin
+	mov RDI, [R12 + offset_raiz] ; sino borro el nodo raiz y todos sus sig e hijos
 	call nodo_borrar
 
-	add rsp, 8
-	pop r12
-	pop rbp
-	ret
+	.fin:
+		mov RDI, R12
+		call free
+		add RSP, 8
+		pop R12
+		pop RBP
+		ret
 
-; ~ void nodo_borrar(nodo_t *self) borro todo el nodo EN CASO DE PERDER MEMORIA CHEQUEAR SI ESTA BIEN ESTE
 nodo_borrar:
+	push RBP
+	mov RBP, RSP
+	push R12
+	sub RSP, 8
 
-	push rbp ; Pila Alienada
-	mov rbp, rsp
-	push r12 ; Pila Desalineada
-	sub rsp, 8 ; Pila Alineada
-	call free
-	;MOV qword [R12],NULL
-	add rsp, 8
-	pop r12
-	pop rbp
-	ret
+	mov R12, RDI ; R12 = *nodo
+	cmp qword R12, NULL ; if (nodo = NULL) fin
+	je .fin
+	cmp qword [R12 + offset_hijos], NULL ; if (nodo.hijos == null) borrar siguientes
+	je .borrar_siguientes
+	mov RDI, [R12 + offset_hijos] ; sino borro los hijos
+	call nodo_borrar
+
+		.borrar_siguientes:
+			cmp qword [R12 + offset_sig], NULL ; if (nodo.sig == null) fin
+			je .fin
+			mov RDI, [R12 + offset_sig] ; sino borro los siguientes
+			call nodo_borrar
+	.fin:
+		mov RDI, R12 ; borro el nodo
+		call free
+		add RSP, 8
+		pop R12
+		pop RBP
+		ret
+
+
+
 
 
 nodo_crear:
 ;nodo *nodo_crear(char c)
-	PUSH rbp
-	MOV rbp, rsp
-	XOR RBX, RBX
-	MOV RBX, RDI ; COPIO EL CHAR
-	MOV RDI, size_nodo ; paso tam del nodo
-	Call malloc ; recibo en rax el puntero
-	
-	
-	MOV qword [RAX], NULL ; el siguiente nodo a este es NULL
-	MOV qword [RAX+offset_hijos], NULL ; como estoy creando un nodo no tengo hijo = NULL
-	jmp .caracterValido
-.sigo:
-	MOV [RAX + offset_c], BL, ;guardo el char
-	MOV byte[RAX + offset_fin], FALSE; palabra no termina
-	jmp .fin
-
-
-	.caracterValido:
-	CMP byte BL, 61h
-	JL .veoSiEsNumero
-	CMP byte BL, 7Ah
-	JL .sigo
-	XOR RBX, RBX
-	MOV byte BL, "a"
-	jmp .sigo
-
-.veoSiEsNumero:
-	CMP byte BL, 39h
-	JLE .veoSiEsNumero
-	XOR RBX, RBX
-	MOV byte BL, "a"
-	jmp .sigo
-
-.veoSiEsNumero1:
-	CMP byte BL, 30h
-	JGE .sigo
-	XOR RBX, RBX
-	MOV byte BL, "a"
-	jmp .sigo
-
-	.fin:
-	POP RBP
-	RET
-
-
-insertar_nodo_en_nivel:
-	;RDI DIRECCION DEL 1er NODO de ese nivel; esto apunta a hijos del padre
-	;RSI CHAR que tengo que agregar
 	push RBP
 	mov RBP, RSP
-	push R13
-	push R14
-	push R15
-	sub rsp, 8
-	mov R13, RDI ; copio puntero del nodo
-	mov R14, R13 
-	mov RDI, RSI ;paso char a rdi para crear nodo
-	cmp qword [R13], NULL
-	je .nivelVacio ; en caso que mi trie inicie vacio o me pasen un puntero a hijos del padre null
-	mov R14, [R14+offset_sig]
-	.ciclo:
-		cmp [R14 + offset_c], SIL; si es igual lo doy y temine
-		je .noAgrego
-		cmp [R14+offset_c], SIL ; lo comparo con el char que esta en RSI  
-		jg .agregoPrimero ; si es menor va primero y no tengo anterior
-		cmp qword [R14+offset_sig], NULL ; si el siguiente nodo esta vacio agrego al nuevo al final significando q es el mayor a todos
-		je .agregoUltimo
-		MOV R15, [R14+offset_sig] ; es el siguiente nodo
-		cmp [R15+offset_c], SIL ; lo comparo con el sig nodo
-		jg .agregoEnElMedio
-		mov R14, [R14+offset_sig]
-		jmp .ciclo
-		
-	.noAgrego:
-		mov RAX, R14
-		jmp .fin
-	.agregoPrimero:
-		call nodo_crear ;en RAX tengo el nuevo nodo
-		mov [RAX+offset_sig], R14
-		;Mov [R13 + offset_hijos], RAX
-		;LEA R13, [RAX + offset_sig]
-		MOV [R13], rax
-		jmp .fin
-	.agregoUltimo:
-		call nodo_crear ;en RAX tengo el nuevo nodo
-		mov [R14+offset_sig], RAX
-		jmp .fin
-	.agregoEnElMedio:
-		call nodo_crear ;en RAX tengo el nuevo nodo
-		mov [R14+offset_sig], RAX
-		Mov [RAX+offset_sig], R15
-		jmp .fin
-	.nivelVacio:
-		call nodo_crear ;en RAX tengo el nuevo nodo
-		mov [R13], RAX
-		
+	push R12
+	sub RSP, 8
+
+	call validar_caracter
+	mov byte R12b, AL ; RAX = char c
+	mov RDI, size_nodo
+	call malloc ; creo un puntero a nodo, RAX = &nodo
+	mov qword [RAX + offset_sig], NULL ; nodo.sig = NULL
+	mov qword [RAX + offset_hijos], NULL ; nodo.hijos = NULL
+	mov [RAX + offset_c], R12B ; nodo.c = R12b
+	mov byte [RAX + offset_fin], FALSE ; nodo.fin = false
+
+	add RSP, 8
+	pop R12
+	pop RBP
+	ret
+
+
+
+validar_caracter: ; RDI -> char c
+	cmp DL, "A" ; if (c < 'A') no es mayuscula
+	jl .no_es_mayuscula
+	; sino comparo con z
+	cmp DL, "Z" ; if (c > 'Z') no es mayuscula
+	jg .no_es_mayuscula 
+	; si es mayuscula lo paso a minuscula
+	add DL, 32 ; c = c + 32 que es la transformacion a minuscula
+	jmp .fin
+
+	.no_es_mayuscula:
+		cmp DL, "0" ; if (c < '0') no es numero
+		jl .no_es_numero
+		; sino comparo con 9
+		cmp DL, "9" ; if (c > '9') no es numero
+		jg .no_es_numero
+		jmp .fin ; si es numero salgo
+
+	.no_es_numero:
+		cmp DL, "a" ; if (c < 'a') no es minuscula
+		jl .no_es_minuscula
+		; sino comparo con z
+		cmp DL, "z" ; if (c > 'z') no es minuscula
+		jg .no_es_minuscula
+		jmp .fin ; si es minuscula salgo
+
+	.no_es_minuscula:
+		mov DL, 'a' 
+
 	.fin:
-		add rsp,8
-		pop R15
-		pop R14
-		pop R13
-		pop RBP
-		ret
+	mov AL, DL ; pongo en RAX el resultado
+	ret
+
+insertar_nodo_en_nivel:
+	push RBP
+	mov RBP, RSP
+	push R12
+	push R13
+
+	mov R12, RDI ; R12 = **nodo nivel
+	mov byte R13b, SIL; RSI ; R13b = char c
+	mov RDI, [R12] ; RDI = *nodo nivel
+	call nodo_buscar 
+	cmp RAX, NULL ; if (nodo_buscar(c) != NULL) fin
+	jne .fin
+	xor rdi, rdi
+	mov rdi, R13 ; crea nodo con char c
+	call nodo_crear
 	
+	mov R8, [R12] ; R8 = *nodo_nivel
+	cmp R8, NULL ; if (*nodo_nivel != NULL) 
+	jne .ciclo ; sigo en .ciclo
+	mov [R12], RAX ; sino inserto nuevo_nodo como unico y primero
+	jmp .fin 
+
+	.ciclo:
+		mov R10b, [RAX + offset_c] ; R10b =  nuevo_nodo.c
+		cmp byte R10b, [R8 + offset_c] ; if (nuevo_nodo.c < nodo_nivel.c) insertar adelante
+		jl .insertar_adelante
+		mov R9, [R8 + offset_sig] ; R9 = nodo_nivel.sig
+		cmp R9, NULL ; else if (nodo_nivel.sig = NULL) insertar a lo ultimo
+		je .insetar_ultimo
+		cmp byte R10b, [R9 + offset_c] ; else if (nuevo_nodo.c < nodo_nivel.sig.c) insertar en medio
+		jle .insertar_en_medio
+		mov R8, R9 ; R8 = nodo_nivel.sig y avanzo
+		jmp .ciclo
+
+	.insertar_adelante:
+		mov [RAX + offset_sig], R8 ; nuevo_nodo.sig = nodo_nivel
+		mov [R12], RAX ; pongo el nuevo nodo creado como primero en el nivel
+		jmp .fin
+	.insertar_en_medio:
+		mov [R8 + offset_sig], RAX ; nodo_nivel.sig = nuevo_nodo
+		mov [RAX + offset_sig], R9 ; nuevo_nodo.sig = nodo_nivel.sig
+		jmp .fin
+	.insetar_ultimo:		
+		mov [R8 + offset_sig], RAX ; nodo_nivel.sig = nuevo_nodo	
+		jmp .fin
+
+	.fin:
+	pop R13
+	pop R12
+	pop RBP
+	ret
 
 trie_agregar_palabra:
-	PUSH RBP
-	MOV RBP, RSP
-	PUSH R12
-	PUSH R13
+	push RBP
+	mov RBP, RSP
+	push R12
+	push R13
+	push R14
+	sub RSP, 8
 
-	
-	MOV R12, RDI								; guardo en R12 trie*
-	MOV R13, RSI								; guardo en R13 char*
-	XOR RSI, RSI
-	MOV byte SIL, [R13]								; guardo en SIL el primer char
-	CMP byte SIL, NULL								; veo si me pasaron string vacio
-	JE .fin
-			CMP qword[R12 + offset_raiz], NULL		; veo si el trie esta vacio
-			JNE .trie_no_vacio
-			XOR RDI, RDI						; limpio RDI
-			MOV DIL, SIL						; pongo en DIL el char para nodo_crear
-			CALL nodo_crear
-			MOV [R12 + offset_raiz], RAX		; pongo el nuevo nodo como raiz del trie
-			LEA RDI, [RAX  + offset_hijos]		; R8: n (nodo*) a raiz
-			JMP .agregoHijos
-	.trie_no_vacio:
-			CALL insertar_nodo_en_nivel
-			LEA RDI, [RAX + offset_hijos]							
-	.agregoHijos:
-			ADD r13, 1
-			XOR RSI, RSI
-			MOV SIL, [R13]
-			CALL insertar_nodo_en_nivel
-			LEA RDI, [RAX + offset_hijos]
-			CMP byte[R13 + 1], 0			
-			JNE .agregoHijos
-			MOV byte[RAX + offset_fin] , TRUE		
-	
-.fin:
-	POP R13
-	POP R12
-	POP RBP
-	RET
+	mov R12, RDI ; R12 = *trie t
+	mov R13, RSI ; R13 = *char p
+	lea R14, [R12 + offset_raiz]
+
+	.ciclo:
+		cmp byte [R13], 0 ; si termino de recorrer el string, fin
+		je .fin
+		mov RDI, R14 ; llamo a insertar_nodo_en_nivel con la direccion de hijos del nodo
+		mov RSI, [R13] ; y el char
+		call insertar_nodo_en_nivel
+		lea R14, [RAX + offset_hijos] ; R14 = nodo.hijos
+		lea R13, [R13 + 1] ; avanzo sobre el string
+		jmp .ciclo
+
+	.fin:
+	mov byte [RAX + offset_fin], TRUE ; indico que es fin de palabra
+	add RSP, 8
+	pop R14
+	pop R13
+	pop R12
+	pop RBP
+	ret
 
 
 trie_imprimir:
@@ -307,7 +287,9 @@ trie_imprimir:
 	mov rbp, rsp
 	push r12 ; Pila Desalineada
 	push r15 ; Pila Alineada
-	
+	push r14
+	push r13
+
 	
 	mov r12, rsi ; Archivo
 	mov r15, rdi ; TRIE
@@ -384,6 +366,8 @@ trie_imprimir:
 	MOV RDI, R13
 	CALL lista_borrar
 
+	pop r13
+	pop r14
 	pop r15
 	pop r12
 	pop rbp	
@@ -401,6 +385,8 @@ trie_imprimir:
 	mov rdi, r12
 	call fclose
 
+	pop r13
+	pop r14
 	pop r15
 	pop r12
 	pop rbp	
@@ -450,35 +436,29 @@ buscar_palabra:
 
 nodo_buscar:
 ;nodo *nodo_buscar(nodo *n, char c)
-	PUSH RBP
-	MOV RBP,RSP
-	PUSH R15
-	SUB RSP,8
-	MOV R15, RDI
-	CMP qword R15, NULL
+	MOV R9, RDI
+	CMP qword R9, NULL
 	JE .fin
 	CMP byte RSI, NULL
 	JE .noHayChar
 	.seguimos:
-		CMP [R15 + offset_c], SIL
-		JE .fin
-		CMP byte [R15 + offset_sig], NULL
+		CMP [R9 + offset_c], SIL
+		JE .esta
+		CMP byte [R9 + offset_sig], NULL
 		JE .noEsta
-		MOV R15, [r15 + offset_sig]
+		MOV R9, [r9 + offset_sig]
 		jmp .seguimos
 
 	.noHayChar:
-		mov r15, NULL
+		mov RAX, NULL
 		jmp .fin
 
 	.noEsta:
-		MOV R15, [R15 + offset_sig]
+		MOV RAX, NULL
 		jmp .fin
+	.esta:
+		MOV RAX, R9 ;devuelvo null o el nodo
 	.fin:
-		MOV RAX, r15 ;devuelvo null o el nodo
-		ADD RSP, 8
-		POP R15
-		POP RBP
 		ret
 
 
@@ -783,71 +763,45 @@ nodo_prefijo:
 	RET
 
 
-trie_construir:
-;trie *trie_construir(char *nombre_archivo)
-;en rdi tengo el puntero al archivo
-	Push RBP,
-	MOV RBP, RSP
-	push r12 ; Pila Desalineada
-	push r15 ; Pila Alineada
-	
-	mov r15, rdi ; archivo
-	mov rdi, r15
-	mov rsi, modoFOpenRead ; seteo el modo de abrir el arvhivo
+trie_construir: ; RDI -> char* nombre_archivo
+	push RBP
+	mov RBP, RSP
+	push R12
+	push R13
+	push R14
+	push R15
+
+	mov RSI, modo_read ; asigno segundo parametro; modo de apertura read
 	call fopen
-	mov r15, rax ; Guardo el puntero al archivo abierto
-	jmp .creoPuntero
-.continuo:
-	xor R13, r13
-.ciclo:
-	mov rdi, r15
-	mov rsi, string1
-	mov rdx, r12
-	mov rax, 1
-	call fscanf
-	CMP BYTE [R12], 3ch
-	JE .trieVacio
- 	CMP EAX,NULL
-	JLE .eliminoPuntero
-	jmp .agregarPalabra
-
-	
-.creoPuntero:
-	MOV RDI, 1024
-	Call malloc ;creo el puntero para las palabras
-	MOV R12, RAX
-	MOV R14, RAX
-	jmp .continuo
-
-.trieVacio:
+	mov R12, RAX ; R12 = *fp pongo en R12 el puntero al archivo
+	mov RDI, longitud_max_palabra ; creo un puntero para una palabra acotada
+	call malloc
+	mov R13, RAX ; R13 = char* palabra
 	call trie_crear
-	jmp .eliminoPuntero
+	mov R14, RAX ; R14 = trie_crear()
 
-.agregarPalabra:
-	cmp r13, NULL
-	je .trie
-.agrego:
-	MOV RDI, R13
-	MOV RSI, R12
-	CALL trie_agregar_palabra
-	jmp .ciclo
+	.ciclo:
+		mov RDI, R12 ; primer parametro fp*
+		mov RSI, format_string ; formato '%s'
+		mov RDX, R13 ; palabra
+		call fscanf
+		cmp EAX, NULL ; if (fscanf = NULL) salgo
+		jle .fin
+		; sino agrego palabra
+		mov RDI, R14 ; primer parametro trie
+		mov RSI, R13 ; segundo parametro palabra para agregar
+		call trie_agregar_palabra
+		jmp .ciclo
 
-	.trie:
-	call trie_crear
-	MOV R13, RAX
-	JMP .agrego
-
-.eliminoPuntero:
-	MOV RDI, R14
-	CALL free
-	MOV qword [R14], NULL
-	
-
-	.terminarArchivo:
-	mov rdi, r15
-	call fclose
-	mov rax, r13
-	pop r15
-	pop r12
-	pop rbp	
+	.fin:
+		mov RDI, R13 ; borro el string creado
+		call free
+		mov RDI, R12 ; cierro el archivo
+		call fclose
+		mov RAX, R14 ; devuelvo el trie
+	pop R15
+	pop R14
+	pop R13
+	pop R12
+	pop RBP	
 	ret

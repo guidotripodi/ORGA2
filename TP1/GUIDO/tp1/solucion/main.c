@@ -44,12 +44,12 @@ int main(void) {
 	
 	/********************************
 	trie_imprimir
-	**********************************/
+	*********************************/
 
 	trie_imprimir(t,nombre_archivo);
 	//trie_borrar(t);
 
-	/*char* e14 = "boludos";
+	char* e14 = "boludos";
 	char* e15 = "gil";
 	trie_agregar_palabra(t,e14);
 	//trie_imprimir(t,nombre_archivo);
@@ -84,13 +84,13 @@ int main(void) {
 	//trie_imprimir(t,nombre_archivo);
 	trie_agregar_palabra(t,e26);
 	trie_agregar_palabra(t,e27);
-	//trie_imprimir(t,nombre_archivo);
+	trie_imprimir(t,nombre_archivo);
 	
 
 
 	/*************************************
 	busca_palabras: 
-	**************************************
+	**************************************/
 	char* e10 = "casas";
 	bool b = buscar_palabra(t,e1); 
 	bool b1 = buscar_palabra(t,e);
@@ -105,11 +105,12 @@ int main(void) {
 /*************************************
 	trie_borrar: 
 	**************************************/
-	//trie_borrar(t1);
+
+	trie_borrar(t1);
 
 	/*************************************
 	palabra_prefijo: 
-	**************************************
+	**************************************/
 	listaP* l2 = lista_crear();
 	char* e4 = "c";
 	listaP* l3 = lista_crear();
@@ -165,7 +166,7 @@ int main(void) {
 	listaP* l11 = lista_crear();
 	char* tecla5 = "2272";
 	l11= predecir_palabras(t,tecla5);
-	/*lista_borrar(l1);
+	lista_borrar(l1);
 	lista_borrar(l2);
 	lista_borrar(l3);
 	lista_borrar(l4);
@@ -175,7 +176,7 @@ int main(void) {
 	lista_borrar(l8);
 	lista_borrar(l9);
 	lista_borrar(l10);
-	lista_borrar(l11);*/
+	lista_borrar(l11);
 	trie_borrar(t);
 
 	printf("Valor: %d",1);
